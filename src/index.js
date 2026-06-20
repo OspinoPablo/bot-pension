@@ -13,9 +13,11 @@ import { fileURLToPath } from "url";
 import pkg from "whatsapp-web.js";
 const { Client, LocalAuth } = pkg;
 import qrcode from "qrcode-terminal";
+import QRCode from "qrcode";
 
 import { config } from "./config.js";
-import { think, noSabe } from "./brain.js";
+import { think, noSabe, getFaqText, setFaqText } from "./brain.js";
+import { startServer } from "./server.js";
 import {
   getMode,
   setMode,
@@ -40,6 +42,11 @@ const pendingBotTexts = [];
 
 // Última lista mostrada con /estado, para que "/bot 2" sepa a qué chat se refiere.
 let ultimaLista = [];
+
+// Estado para el panel web.
+let estadoBot = "iniciando"; // "iniciando" | "qr" | "conectado" | "desconectado"
+let qrDataUrl = null; // imagen del QR mientras no esté conectado
+let miNumero = null; // número del bot (se llena al conectar)
 
 // Carpetas de sesión de WhatsApp (se borran solas si cierras sesión).
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -206,18 +213,27 @@ process.on("unhandledRejection", (err) => {
 });
 
 // ---- Mostrar el código QR para vincular WhatsApp ----
-client.on("qr", (qr) => {
+client.on("qr", async (qr) => {
   console.log("\n📱 Escanea este código QR con WhatsApp:");
-  console.log("   (WhatsApp > Dispositivos vinculados > Vincular dispositivo)\n");
+  console.log("   (WhatsApp > Dispositivos vinculados > Vincular dispositivo)");
+  console.log(`   …o ábrelo en el panel: http://localhost:${config.panelPort}\n`);
   qrcode.generate(qr, { small: true });
+  estadoBot = "qr";
+  try {
+    qrDataUrl = await QRCode.toDataURL(qr); // imagen para el panel web
+  } catch {
+    qrDataUrl = null;
+  }
 });
 
 client.on("ready", async () => {
   console.log("\n✅ ¡Bot conectado y listo! Esperando mensajes...\n");
+  estadoBot = "conectado";
+  qrDataUrl = null;
 
   // Normalizar el chat de control con el identificador EXACTO de WhatsApp.
   const miId = client.info?.wid?._serialized; // ej: 573001234567@c.us
-  const miNumero = client.info?.wid?.user; // solo dígitos
+  miNumero = client.info?.wid?.user; // solo dígitos
   if (!config.adminNumber || config.adminNumber === miNumero) {
     // El admin es tu propio número (o no lo configuraste): usa tu chat contigo mismo.
     adminChatId = miId;
@@ -243,6 +259,7 @@ client.on("ready", async () => {
 client.on("auth_failure", (m) => console.error("❌ Falló la autenticación:", m));
 client.on("disconnected", async (motivo) => {
   console.error("⚠️  Bot desconectado:", motivo);
+  estadoBot = "desconectado";
   // Si cerraste sesión (desde el teléfono o WhatsApp), limpiar la sesión vieja.
   if (motivo === "LOGOUT" || motivo === "NAVIGATION") {
     await manejarLogout(motivo);
@@ -330,6 +347,29 @@ client.on("message_create", async (msg) => {
   } catch (err) {
     console.error("Error procesando mensaje:", err);
   }
+});
+
+// ---- Panel web de control ----
+// Le pasamos funciones para que pueda leer el estado y actuar sobre el bot.
+startServer({
+  getStatus: async () => ({
+    estado: estadoBot,
+    qr: qrDataUrl,
+    numero: miNumero ? `+${miNumero}` : null,
+    ias: config.llmChain.map((p) => p.name).join(" → ") || "ninguna",
+  }),
+  listarPausados: async () =>
+    Promise.all(
+      listPaused().map(async (p) => ({
+        id: p.chatId,
+        nombre: await nombreDe(p.chatId),
+        modo: p.mode,
+      }))
+    ),
+  resume: (id) => setMode(id, "AUTO"),
+  resumeAll: () => listPaused().forEach((p) => setMode(p.chatId, "AUTO")),
+  getFaq: () => getFaqText(),
+  setFaq: (texto) => setFaqText(texto),
 });
 
 console.log("Iniciando bot de la pensión... (esto puede tardar unos segundos)");

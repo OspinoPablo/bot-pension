@@ -66,6 +66,10 @@ export const config = {
   // Número del dueño para recibir avisos (formato: 573001234567)
   adminNumber: (process.env.ADMIN_NUMBER || "").replace(/\D/g, ""),
 
+  // Panel web de control
+  panelPort: Number(process.env.PANEL_PORT) || 3000,
+  panelPassword: process.env.PANEL_PASSWORD || "", // vacío = sin contraseña (solo local)
+
   // Tiempo que el bot espera antes de retomar un chat donde entró el humano
   autoResumeMs: (Number(process.env.AUTO_RESUME_MINUTES) || 30) * 60 * 1000,
 

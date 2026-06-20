@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Panel del Bot</title>
+  <style>
+    :root {
+      --bg: #0f1720; --card: #18222e; --line: #26323f;
+      --txt: #e7eef5; --muted: #93a4b3; --green: #25d366; --green2: #1fa556;
+      --red: #ef4444; --amber: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg); color: var(--txt); line-height: 1.5;
+    }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; gap: 10px;
+    }
+    header h1 { font-size: 18px; margin: 0; }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 20px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 7px; font-size: 13px;
+      padding: 5px 12px; border-radius: 999px; background: #233; font-weight: 600;
+    }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+    .badge.ok { background: rgba(37,211,102,.15); color: var(--green); }
+    .badge.ok .dot { background: var(--green); }
+    .badge.warn { background: rgba(245,158,11,.15); color: var(--amber); }
+    .badge.warn .dot { background: var(--amber); }
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+      padding: 20px; margin-bottom: 18px;
+    }
+    .card h2 { margin: 0 0 4px; font-size: 16px; }
+    .card p.sub { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+    .qrbox { text-align: center; }
+    .qrbox img { width: 260px; max-width: 80%; background: #fff; padding: 12px; border-radius: 12px; }
+    .steps { color: var(--muted); font-size: 14px; text-align: left; max-width: 360px; margin: 16px auto 0; }
+    .row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid var(--line);
+    }
+    .row:last-child { border-bottom: none; }
+    .row .who { font-weight: 600; }
+    .row .tag { font-size: 12px; color: var(--muted); }
+    .tag.pending { color: var(--amber); }
+    button {
+      font: inherit; font-weight: 600; cursor: pointer; border: none; border-radius: 9px;
+      padding: 9px 14px; color: #06210f; background: var(--green); transition: .15s;
+    }
+    button:hover { background: var(--green2); color: #fff; }
+    button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+    button.ghost:hover { color: var(--txt); background: #1f2a36; }
+    .empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
+    textarea {
+      width: 100%; min-height: 340px; resize: vertical; background: #0e161e; color: var(--txt);
+      border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-family: ui-monospace, monospace;
+      font-size: 13px; line-height: 1.55;
+    }
+    .barra { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; }
+    .ok-msg { color: var(--green); font-size: 13px; }
+    .hidden { display: none; }
+    .meta { color: var(--muted); font-size: 13px; }
+    .meta b { color: var(--txt); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🤖 Panel del Bot</h1>
+    <span id="badge" class="badge"><span class="dot"></span><span id="badgeTxt">Conectando…</span></span>
+  </header>
+
+  <div class="wrap">
+
+    <!-- VISTA: no conectado (mostrar QR) -->
+    <div id="qrView" class="card qrbox hidden">
+      <h2>Vincula tu WhatsApp</h2>
+      <p class="sub">Escanea este código para conectar el bot a tu número.</p>
+      <img id="qrImg" alt="Código QR" />
+      <div class="steps">
+        1. Abre <b>WhatsApp</b> en tu teléfono.<br>
+        2. Ve a <b>Dispositivos vinculados → Vincular un dispositivo</b>.<br>
+        3. Apunta la cámara a este código.
+      </div>
+    </div>
+
+    <!-- VISTA: conectado -->
+    <div id="panelView" class="hidden">
+
+      <div class="card">
+        <h2>Estado</h2>
+        <p class="meta">Número: <b id="numero">—</b></p>
+        <p class="meta">IA(s) activas: <b id="ias">—</b></p>
+      </div>
+
+      <div class="card">
+        <h2>Chats atendidos por ti (en pausa)</h2>
+        <p class="sub">Aquí están las conversaciones donde el bot está callado. Reactívalo cuando termines.</p>
+        <div id="pausados"></div>
+        <div class="barra">
+          <span class="meta" id="pausadosCount"></span>
+          <button class="ghost" id="btnTodos" onclick="reactivarTodos()">Reactivar todos</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Información de la pensión (FAQ)</h2>
+        <p class="sub">Esto es lo que el bot sabe responder. Edítalo y guarda; aplica al instante.</p>
+        <textarea id="faq" placeholder="Cargando…"></textarea>
+        <div class="barra">
+          <span class="ok-msg hidden" id="faqOk">✓ Guardado</span>
+          <span></span>
+          <button onclick="guardarFaq()">Guardar FAQ</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let faqCargado = false;
+
+    async function api(ruta, opts) {
+      const r = await fetch(ruta, opts);
+      return r.json();
+    }
+
+    function setBadge(estado) {
+      const b = document.getElementById("badge");
+      const t = document.getElementById("badgeTxt");
+      b.className = "badge";
+      if (estado === "conectado") { b.classList.add("ok"); t.textContent = "Conectado"; }
+      else if (estado === "qr") { b.classList.add("warn"); t.textContent = "Esperando vinculación"; }
+      else { b.classList.add("warn"); t.textContent = "Conectando…"; }
+    }
+
+    async function tick() {
+      try {
+        const s = await api("/api/status");
+        setBadge(s.estado);
+        const conectado = s.estado === "conectado";
+        document.getElementById("qrView").classList.toggle("hidden", conectado);
+        document.getElementById("panelView").classList.toggle("hidden", !conectado);
+
+        if (s.estado === "qr" && s.qr) {
+          document.getElementById("qrImg").src = s.qr;
+        }
+        if (conectado) {
+          document.getElementById("numero").textContent = s.numero || "—";
+          document.getElementById("ias").textContent = s.ias || "—";
+          if (!faqCargado) {
+            const f = await api("/api/faq");
+            document.getElementById("faq").value = f.texto || "";
+            faqCargado = true;
+          }
+          await refrescarPausados();
+        }
+      } catch (e) { /* el servidor puede estar reiniciando */ }
+    }
+
+    async function refrescarPausados() {
+      const lista = await api("/api/paused");
+      const cont = document.getElementById("pausados");
+      const count = document.getElementById("pausadosCount");
+      document.getElementById("btnTodos").style.display = lista.length ? "" : "none";
+      if (!lista.length) {
+        cont.innerHTML = '<div class="empty">No hay chats en pausa. El bot está atendiendo todo. ✅</div>';
+        count.textContent = "";
+        return;
+      }
+      count.textContent = lista.length + " en pausa";
+      cont.innerHTML = lista.map(c => `
+        <div class="row">
+          <div>
+            <div class="who">${escapar(c.nombre)}</div>
+            <div class="tag ${c.modo === 'PENDING' ? 'pending' : ''}">
+              ${c.modo === 'PENDING' ? '⏳ duda sin responder' : '✋ lo atiendes tú'}
+            </div>
+          </div>
+          <button onclick="reactivar('${c.id}')">Reactivar bot</button>
+        </div>
+      `).join("");
+    }
+
+    function escapar(s) {
+      return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    }
+
+    async function reactivar(id) {
+      await api("/api/resume", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id }) });
+      await refrescarPausados();
+    }
+    async function reactivarTodos() {
+      await api("/api/resume-all", { method: "POST" });
+      await refrescarPausados();
+    }
+
+    async function guardarFaq() {
+      const texto = document.getElementById("faq").value;
+      await api("/api/faq", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ texto }) });
+      const ok = document.getElementById("faqOk");
+      ok.classList.remove("hidden");
+      setTimeout(() => ok.classList.add("hidden"), 2500);
+    }
+
+    tick();
+    setInterval(tick, 3000);
+  </script>
+</body>
+</html>

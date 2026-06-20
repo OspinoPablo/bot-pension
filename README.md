@@ -66,6 +66,25 @@ funciona). No tienes que volver a escanear el QR la próxima vez.
 
 ---
 
+## 🖥️ Panel web de control
+
+Al arrancar el bot también se abre un panel en tu navegador:
+
+**http://localhost:3000**
+
+Desde ahí puedes, sin tocar la terminal:
+- **Vincular WhatsApp** escaneando el QR (aparece en el panel cuando no está conectado).
+- Ver el **estado** del bot y qué IAs están activas.
+- Ver los **chats en pausa** (los que atiendes tú) y **reactivar el bot** con un botón.
+- Editar el **FAQ** (la información de la pensión) y guardar; aplica al instante.
+
+Configuración en el `.env`:
+- `PANEL_PORT` → el puerto (por defecto 3000).
+- `PANEL_PASSWORD` → déjalo vacío en tu PC. **En un servidor (VPC), ponle una
+  contraseña** para que nadie más entre al panel.
+
+---
+
 ## 🎮 Comandos (los escribes en TU chat de avisos, NO en el del cliente)
 
 Tu "chat de avisos" es el chat contigo mismo donde el bot te notifica las dudas.

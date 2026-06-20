@@ -8,7 +8,8 @@ import { config, NO_SE_TAG } from "./config.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FAQ_PATH = path.join(__dirname, "..", "data", "faq.md");
 
-// Lee el FAQ desde el disco (se relee en cada arranque del bot).
+// Lee el FAQ desde el disco. Se relee en CADA mensaje, así los cambios que
+// hagas desde el panel web aplican al instante sin reiniciar el bot.
 function loadFaq() {
   try {
     return fs.readFileSync(FAQ_PATH, "utf8");
@@ -17,10 +18,17 @@ function loadFaq() {
   }
 }
 
-const FAQ = loadFaq();
+// Lee/guarda el FAQ (lo usa el panel web).
+export function getFaqText() {
+  return loadFaq();
+}
+export function setFaqText(texto) {
+  fs.writeFileSync(FAQ_PATH, texto, "utf8");
+}
 
 // Las instrucciones que definen la personalidad y las reglas del bot.
 function systemPrompt() {
+  const FAQ = loadFaq();
   return `Eres el asistente virtual de una pensión de habitaciones para estudiantes y trabajadores en Barranquilla, Colombia.
 
 Tu trabajo es responder dudas de personas interesadas en arrendar, de forma cálida, breve y natural (trato amable costeño, sin exagerar). Habla de "tú". Responde en 1 a 3 frases, salvo que pidan más detalle. Usa pocos emojis y solo cuando sume.
