@@ -7,6 +7,9 @@
 //  - El CONTROL (reactivar el bot) se hace desde tu CHAT DE AVISOS con
 //    comandos, para que el cliente nunca vea nada.
 // ============================================================
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import pkg from "whatsapp-web.js";
 const { Client, LocalAuth } = pkg;
 import qrcode from "qrcode-terminal";
@@ -37,6 +40,14 @@ const pendingBotTexts = [];
 
 // Última lista mostrada con /estado, para que "/bot 2" sepa a qué chat se refiere.
 let ultimaLista = [];
+
+// Carpetas de sesión de WhatsApp (se borran solas si cierras sesión).
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const SESSION_DIRS = [
+  path.join(__dirname, "..", ".wwebjs_auth"),
+  path.join(__dirname, "..", ".wwebjs_cache"),
+];
+let limpiandoSesion = false; // evita limpiar dos veces a la vez
 
 const client = new Client({
   authStrategy: new LocalAuth(), // guarda la sesión: solo escaneas el QR una vez
@@ -151,6 +162,49 @@ async function manejarComandoAdmin(texto) {
   // Cualquier otro texto en el chat de avisos se ignora (es una nota tuya).
 }
 
+// Borra las carpetas de sesión, con reintentos (Windows tarda en soltar archivos).
+async function borrarSesion() {
+  for (const dir of SESSION_DIRS) {
+    for (let intento = 1; intento <= 10; intento++) {
+      try {
+        if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+        break; // borrada (o no existía)
+      } catch (err) {
+        if (intento === 10) {
+          console.error(`No se pudo borrar ${dir}: ${err.message}`);
+        } else {
+          await new Promise((r) => setTimeout(r, 500)); // esperar y reintentar
+        }
+      }
+    }
+  }
+}
+
+// Se llama cuando se cierra sesión: cierra el navegador, limpia y termina.
+async function manejarLogout(motivo) {
+  if (limpiandoSesion) return;
+  limpiandoSesion = true;
+  console.log(`🧹 Sesión cerrada (${motivo}). Limpiando carpetas...`);
+  try {
+    await client.destroy(); // cierra el navegador para liberar los archivos
+  } catch {}
+  await borrarSesion();
+  console.log("✅ Carpetas de sesión borradas.");
+  console.log("👉 Vuelve a iniciar con: npm start  (saldrá un QR nuevo para vincular).");
+  process.exit(0);
+}
+
+// Red de seguridad: si la librería revienta al borrar la sesión (error EBUSY),
+// lo atrapamos y hacemos la limpieza nosotros en vez de crashear.
+process.on("unhandledRejection", (err) => {
+  const msg = String(err?.message || err);
+  if (msg.includes("EBUSY") || msg.includes(".wwebjs")) {
+    manejarLogout("limpieza tras error EBUSY");
+  } else {
+    console.error("Error no manejado:", err);
+  }
+});
+
 // ---- Mostrar el código QR para vincular WhatsApp ----
 client.on("qr", (qr) => {
   console.log("\n📱 Escanea este código QR con WhatsApp:");
@@ -187,7 +241,13 @@ client.on("ready", async () => {
 });
 
 client.on("auth_failure", (m) => console.error("❌ Falló la autenticación:", m));
-client.on("disconnected", (r) => console.error("⚠️  Bot desconectado:", r));
+client.on("disconnected", async (motivo) => {
+  console.error("⚠️  Bot desconectado:", motivo);
+  // Si cerraste sesión (desde el teléfono o WhatsApp), limpiar la sesión vieja.
+  if (motivo === "LOGOUT" || motivo === "NAVIGATION") {
+    await manejarLogout(motivo);
+  }
+});
 
 // ---- El corazón del bot: procesa cada mensaje ----
 client.on("message_create", async (msg) => {
